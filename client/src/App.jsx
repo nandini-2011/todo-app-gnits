@@ -8,8 +8,11 @@ import TodoItem from "./components/TodoItem";
 function App() {
   const [todos, setTodos] = useState([]);
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const pageSize = 5;
 
   // Runs an API action and shows its error in the banner if it fails
   const run = async (action) => {
@@ -27,6 +30,10 @@ function App() {
       setLoading(false)
     );
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search]);
 
   const handleAdd = (title) =>
     run(async () => {
@@ -55,7 +62,26 @@ function App() {
       setTodos((prev) => prev.filter((t) => !t.completed));
     });
 
-  const filteredTodos = todos.filter(FILTERS[filter].test);
+  const filteredTodos = todos.filter((todo) => {
+    const matchesFilter = FILTERS[filter].test(todo);
+    const searchText = search.trim().toLowerCase();
+    const matchesSearch =
+      !searchText || todo.title.toLowerCase().includes(searchText);
+    return matchesFilter && matchesSearch;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredTodos.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleTodos = filteredTodos.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize
+  );
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   return (
     <div className="layout">
@@ -76,6 +102,16 @@ function App() {
 
         <TodoForm onAdd={handleAdd} />
 
+        <div className="search-box">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tasks..."
+            aria-label="Search tasks"
+          />
+        </div>
+
         {error && (
           <div className="error" role="alert">
             <span>{error}</span>
@@ -91,22 +127,48 @@ function App() {
           <div className="empty">
             <img src="/logo.png" alt="" />
             <p>
-              {filter === "done"
-                ? "Nothing completed yet"
-                : "You're all caught up. Add a task above."}
+              {search.trim()
+                ? "No tasks match your search."
+                : filter === "done"
+                  ? "Nothing completed yet"
+                  : "You're all caught up. Add a task above."}
             </p>
           </div>
         ) : (
-          <ul className="todo-list">
-            {filteredTodos.map((todo) => (
-              <TodoItem
-                key={todo._id}
-                todo={todo}
-                onUpdate={handleUpdate}
-                onDelete={handleDelete}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="todo-list">
+              {visibleTodos.map((todo) => (
+                <TodoItem
+                  key={todo._id}
+                  todo={todo}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </ul>
+
+            {totalPages > 1 && (
+              <div className="pagination" aria-label="Todo pagination">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {safePage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
